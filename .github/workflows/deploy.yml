@@ -1,0 +1,79 @@
+name: Deploy CaptionCraft to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: SAM Build
+        run: sam build --template infra/template.yaml
+
+      - name: SAM Deploy
+        run: |
+          sam deploy \
+            --stack-name captioncraft \
+            --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ${{ secrets.AWS_REGION }} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides ApiKeyValue=${{ secrets.API_KEY_VALUE }}
+
+      - name: Get Stack Outputs
+        id: stack
+        run: |
+          get_output() {
+            aws cloudformation describe-stacks \
+              --stack-name captioncraft \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" \
+              --output text
+          }
+          echo "api_url=$(get_output ApiUrl)" >> $GITHUB_OUTPUT
+          echo "bucket_name=$(get_output FrontendBucketName)" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(get_output FrontendUrl)" >> $GITHUB_OUTPUT
+
+      - name: Inject API URL into frontend
+        run: |
+          API_URL="${{ steps.stack.outputs.api_url }}"
+          API_KEY="${{ secrets.API_KEY_VALUE }}"
+          sed -i "s|__API_BASE_URL__|${API_URL}|g" frontend/index.html
+          sed -i "s|__API_KEY__|${API_KEY}|g" frontend/index.html
+
+      - name: Upload frontend to S3
+        run: |
+          aws s3 sync frontend/ s3://${{ steps.stack.outputs.bucket_name }}/ \
+            --cache-control "no-cache" \
+            --delete
+
+      - name: Print URLs
+        run: |
+          echo "============================================"
+          echo "✅ Deployment Complete!"
+          echo "============================================"
+          echo "✅ API URL:      ${{ steps.stack.outputs.api_url }}"
+          echo "✅ Frontend URL: ${{ steps.stack.outputs.frontend_url }}"
+          echo "============================================"

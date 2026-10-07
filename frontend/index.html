@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CaptionCraft: Social Media Caption Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(26, 26, 46, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(200, 241, 53, 0.2);
+      padding: 16px 24px;
+      text-align: center;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 {
+      font-size: clamp(20px, 4vw, 32px);
+      font-weight: 800;
+      background: linear-gradient(135deg, #c8f135, #a8d810);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header p { color: #888; font-size: 14px; margin-top: 4px; }
+
+    /* Main Layout */
+    .container {
+      max-width: 1200px; margin: 0 auto; padding: 24px;
+      display: grid; grid-template-columns: 380px 1fr; gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: rgba(30, 30, 50, 0.9);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+    }
+    .card h2 {
+      font-size: 18px; font-weight: 700; color: #fff;
+      margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+    }
+    .card h2 .icon { font-size: 22px; }
+
+    /* Form Controls */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: #aaa; margin-bottom: 6px; text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .form-group textarea,
+    .form-group input[type="text"],
+    .form-group select {
+      width: 100%; padding: 12px 14px;
+      background: rgba(15, 15, 35, 0.8);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; color: #fff; font-size: 15px;
+      font-family: inherit; transition: border-color 0.2s;
+    }
+    .form-group textarea:focus,
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none; border-color: #c8f135;
+      box-shadow: 0 0 0 3px rgba(200, 241, 53, 0.1);
+    }
+    .form-group textarea { resize: vertical; min-height: 80px; }
+    .form-group select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      cursor: pointer;
+    }
+    select option { background: #1a1a2e; color: #fff; }
+
+    /* Buttons */
+    .btn-run {
+      width: 100%; padding: 14px 24px; border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      background: linear-gradient(135deg, #c8f135, #a8d810);
+      color: #0f0f23; transition: all 0.3s; margin-top: 8px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-run:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(200,241,53,0.3); }
+    .btn-run:active { transform: translateY(0); }
+    .btn-run:disabled {
+      opacity: 0.6; cursor: not-allowed; transform: none;
+      box-shadow: none;
+    }
+    .btn-reset {
+      width: 100%; padding: 10px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; background: transparent; color: #888;
+      font-size: 13px; cursor: pointer; margin-top: 8px; transition: all 0.2s;
+    }
+    .btn-reset:hover { border-color: #f55; color: #f55; }
+
+    /* Output Section */
+    .outputs { display: flex; flex-direction: column; gap: 20px; }
+
+    .output-panel {
+      background: rgba(30, 30, 50, 0.9);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    .output-header {
+      padding: 14px 20px;
+      background: rgba(200, 241, 53, 0.08);
+      border-bottom: 1px solid rgba(200, 241, 53, 0.15);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .output-header h3 {
+      font-size: 15px; font-weight: 700; color: #c8f135;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .output-header .copy-btn {
+      padding: 6px 14px; background: rgba(200,241,53,0.15);
+      border: 1px solid rgba(200,241,53,0.3); border-radius: 8px;
+      color: #c8f135; font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; opacity: 0;
+    }
+    .output-panel.has-content .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: rgba(200,241,53,0.25); }
+
+    .output-body {
+      padding: 20px; min-height: 120px; max-height: 400px;
+      overflow-y: auto; font-size: 14px; line-height: 1.7; color: #ccc;
+    }
+    .output-body::-webkit-scrollbar { width: 6px; }
+    .output-body::-webkit-scrollbar-track { background: transparent; }
+    .output-body::-webkit-scrollbar-thumb { background: rgba(200,241,53,0.3); border-radius: 3px; }
+
+    .output-body .placeholder {
+      color: #555; font-style: italic; display: flex;
+      align-items: center; justify-content: center; height: 80px;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      display: none; align-items: center; justify-content: center;
+      gap: 12px; padding: 30px; color: #c8f135; font-size: 14px;
+    }
+    .spinner.active { display: flex; }
+    .spinner .dot {
+      width: 8px; height: 8px; background: #c8f135;
+      border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .spinner .dot:nth-child(1) { animation-delay: -0.32s; }
+    .spinner .dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    /* Error */
+    .error-msg {
+      display: none; padding: 12px 16px; margin: 12px 20px;
+      background: rgba(255, 80, 80, 0.1); border: 1px solid rgba(255,80,80,0.3);
+      border-radius: 8px; color: #ff6b6b; font-size: 13px;
+    }
+    .error-msg.active { display: block; }
+
+    /* Markdown rendering */
+    .md-content h3 { color: #c8f135; font-size: 15px; margin: 16px 0 8px; font-weight: 700; }
+    .md-content h3:first-child { margin-top: 0; }
+    .md-content p { margin-bottom: 8px; }
+    .md-content strong { color: #fff; }
+    .md-content em { color: #aaa; }
+    .md-content code {
+      background: rgba(200,241,53,0.1); padding: 2px 6px;
+      border-radius: 4px; font-size: 13px; color: #c8f135;
+    }
+    .md-content ul, .md-content ol { padding-left: 20px; margin-bottom: 8px; }
+    .md-content li { margin-bottom: 4px; }
+    .md-content hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 12px 0; }
+
+    /* Status Bar */
+    .status-bar {
+      text-align: center; padding: 16px; color: #555; font-size: 12px;
+    }
+    .status-bar a { color: #c8f135; text-decoration: none; }
+
+    /* Fade-in animation */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>✨ CaptionCraft</h1>
+  <p>AI-Powered Social Media Caption Generator</p>
+</div>
+
+<div class="container">
+  <!-- LEFT: Input Panel -->
+  <div class="card">
+    <h2><span class="icon">📝</span> Your Post Details</h2>
+
+    <div class="form-group">
+      <label>Post Topic / Description</label>
+      <textarea id="topic" placeholder="e.g. Launching our new eco-friendly water bottle made from recycled ocean plastic..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Target Platform</label>
+      <select id="platform">
+        <option value="Instagram">📸 Instagram</option>
+        <option value="TikTok">🎵 TikTok</option>
+        <option value="LinkedIn">💼 LinkedIn</option>
+        <option value="Twitter/X">🐦 Twitter / X</option>
+        <option value="Facebook">👥 Facebook</option>
+        <option value="Threads">🧵 Threads</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Tone of Voice</label>
+      <select id="tone">
+        <option value="Catchy & Engaging">🔥 Catchy & Engaging</option>
+        <option value="Professional">💼 Professional</option>
+        <option value="Humorous & Witty">😂 Humorous & Witty</option>
+        <option value="Inspirational">🌟 Inspirational</option>
+        <option value="Casual & Friendly">😊 Casual & Friendly</option>
+        <option value="Bold & Provocative">💥 Bold & Provocative</option>
+        <option value="Educational">📚 Educational</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Target Audience (optional)</label>
+      <input type="text" id="audience" placeholder="e.g. Gen Z environmentalists, fitness enthusiasts">
+    </div>
+
+    <div class="form-group">
+      <label>Call-to-Action Goal (optional)</label>
+      <input type="text" id="cta" placeholder="e.g. Shop now, Comment below, Share with a friend">
+    </div>
+
+    <button class="btn-run" id="btnRunAll" onclick="runAll()">
+      <span>⚡</span> Generate All
+    </button>
+    <button class="btn-reset" onclick="resetAll()">🗑️ Clear All</button>
+  </div>
+
+  <!-- RIGHT: Output Panels -->
+  <div class="outputs">
+    <!-- Caption Generator -->
+    <div class="output-panel" id="panel-caption">
+      <div class="output-header">
+        <h3>✨ Caption Options</h3>
+        <button class="copy-btn" onclick="copyOutput('caption')">📋 Copy</button>
+      </div>
+      <div class="spinner" id="spinner-caption">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Crafting captions...</span>
+      </div>
+      <div class="error-msg" id="error-caption"></div>
+      <div class="output-body md-content" id="output-caption">
+        <div class="placeholder">Your AI-generated captions will appear here</div>
+      </div>
+    </div>
+
+    <!-- Hashtag Generator -->
+    <div class="output-panel" id="panel-hashtags">
+      <div class="output-header">
+        <h3>#️⃣ Hashtag Suggestions</h3>
+        <button class="copy-btn" onclick="copyOutput('hashtags')">📋 Copy</button>
+      </div>
+      <div class="spinner" id="spinner-hashtags">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Researching hashtags...</span>
+      </div>
+      <div class="error-msg" id="error-hashtags"></div>
+      <div class="output-body md-content" id="output-hashtags">
+        <div class="placeholder">Optimized hashtags will appear here</div>
+      </div>
+    </div>
+
+    <!-- Emoji Suggester -->
+    <div class="output-panel" id="panel-emojis">
+      <div class="output-header">
+        <h3>😍 Emoji Palette</h3>
+        <button class="copy-btn" onclick="copyOutput('emojis')">📋 Copy</button>
+      </div>
+      <div class="spinner" id="spinner-emojis">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Picking emojis...</span>
+      </div>
+      <div class="error-msg" id="error-emojis"></div>
+      <div class="output-body md-content" id="output-emojis">
+        <div class="placeholder">Perfect emoji combinations will appear here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  Powered by <a href="https://aws.amazon.com/bedrock/" target="_blank">Amazon Bedrock</a> &middot;
+  Built from <a href="https://partyrock.aws" target="_blank">PartyRock</a>
+</div>
+
+<script>
+  // ══════════════════════════════════════════════════════════════
+  //  CONFIG — replaced at deploy time by GitHub Actions sed
+  // ══════════════════════════════════════════════════════════════
+  let API_BASE = '__API_BASE_URL__';
+  let API_KEY  = '__API_KEY__';
+
+  if (API_BASE.startsWith('__')) {
+    API_BASE = localStorage.getItem('CAPTIONCRAFT_API_URL') || '';
+  }
+  if (API_KEY.startsWith('__')) {
+    API_KEY = localStorage.getItem('CAPTIONCRAFT_API_KEY') || '';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ENDPOINTS
+  // ══════════════════════════════════════════════════════════════
+  const ENDPOINTS = {
+    caption:  { path: '/caption',  spinner: 'spinner-caption',  output: 'output-caption',  error: 'error-caption',  panel: 'panel-caption'  },
+    hashtags: { path: '/hashtags', spinner: 'spinner-hashtags', output: 'output-hashtags', error: 'error-hashtags', panel: 'panel-hashtags' },
+    emojis:   { path: '/emojis',   spinner: 'spinner-emojis',   output: 'output-emojis',   error: 'error-emojis',   panel: 'panel-emojis'   },
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  MARKDOWN RENDERER (lightweight)
+  // ══════════════════════════════════════════════════════════════
+  function renderMarkdown(text) {
+    if (!text) return '';
+    return text
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      .replace(/^---$/gm, '<hr>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  COLLECT FORM DATA
+  // ══════════════════════════════════════════════════════════════
+  function getFormData() {
+    return {
+      topic:    document.getElementById('topic').value.trim(),
+      platform: document.getElementById('platform').value,
+      tone:     document.getElementById('tone').value,
+      audience: document.getElementById('audience').value.trim() || 'General audience',
+      cta:      document.getElementById('cta').value.trim() || 'Engage and interact',
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  CALL A SINGLE ENDPOINT
+  // ══════════════════════════════════════════════════════════════
+  async function callEndpoint(key, formData) {
+    const ep = ENDPOINTS[key];
+    const spinnerEl = document.getElementById(ep.spinner);
+    const outputEl  = document.getElementById(ep.output);
+    const errorEl   = document.getElementById(ep.error);
+    const panelEl   = document.getElementById(ep.panel);
+
+    // Reset state
+    spinnerEl.classList.add('active');
+    errorEl.classList.remove('active');
+    errorEl.textContent = '';
+    outputEl.innerHTML = '';
+    panelEl.classList.remove('has-content');
+
+    try {
+      const res = await fetch(API_BASE + ep.path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY,
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+
+      if (data.success && data.result) {
+        outputEl.innerHTML = renderMarkdown(data.result);
+        panelEl.classList.add('has-content');
+        outputEl.classList.add('fade-in');
+      } else {
+        throw new Error(data.error || 'Unknown error from API');
+      }
+    } catch (err) {
+      errorEl.textContent = '⚠️ ' + err.message;
+      errorEl.classList.add('active');
+      outputEl.innerHTML = '<div class="placeholder">Generation failed — check error above</div>';
+    } finally {
+      spinnerEl.classList.remove('active');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  RUN ALL — fires all 3 in parallel
+  // ══════════════════════════════════════════════════════════════
+  async function runAll() {
+    const formData = getFormData();
+
+    if (!formData.topic) {
+      alert('Please enter a post topic or description.');
+      document.getElementById('topic').focus();
+      return;
+    }
+
+    const btn = document.getElementById('btnRunAll');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Generating...';
+
+    await Promise.allSettled([
+      callEndpoint('caption',  formData),
+      callEndpoint('hashtags', formData),
+      callEndpoint('emojis',   formData),
+    ]);
+
+    btn.disabled = false;
+    btn.innerHTML = '<span>⚡</span> Generate All';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  COPY TO CLIPBOARD
+  // ══════════════════════════════════════════════════════════════
+  function copyOutput(key) {
+    const el = document.getElementById(ENDPOINTS[key].output);
+    const text = el.innerText || el.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = el.closest('.output-panel').querySelector('.copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => btn.textContent = orig, 2000);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  RESET ALL
+  // ══════════════════════════════════════════════════════════════
+  function resetAll() {
+    document.getElementById('topic').value = '';
+    document.getElementById('audience').value = '';
+    document.getElementById('cta').value = '';
+    document.getElementById('platform').selectedIndex = 0;
+    document.getElementById('tone').selectedIndex = 0;
+
+    Object.keys(ENDPOINTS).forEach(key => {
+      const ep = ENDPOINTS[key];
+      document.getElementById(ep.output).innerHTML =
+        '<div class="placeholder">' +
+        (key === 'caption'  ? 'Your AI-generated captions will appear here' :
+         key === 'hashtags' ? 'Optimized hashtags will appear here' :
+                              'Perfect emoji combinations will appear here') +
+        '</div>';
+      document.getElementById(ep.error).classList.remove('active');
+      document.getElementById(ep.panel).classList.remove('has-content');
+    });
+  }
+</script>
+</body>
+</html>

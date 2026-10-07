@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CaptionCraft - Social Media Caption Generator (PartyRock to AWS)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: 256
+    Timeout: 30
+    Environment:
+      Variables:
+        AWS_REGION_NAME: !Ref AWS::Region
+
+Parameters:
+  ApiKeyValue:
+    Type: String
+    Description: API key value for protecting the API
+    NoEcho: true
+    Default: change-me-to-a-random-string
+
+Resources:
+
+  # ── IAM Role for Bedrock access ──
+  LambdaBedrockRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-bedrock-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/*
+                  - !Sub arn:aws:bedrock:*::foundation-model/*
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+
+  # ── API Gateway ──
+  AppApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Auth:
+        ApiKeyRequired: true
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,x-api-key'"
+        AllowOrigin: "'*'"
+
+  # API Key + Usage Plan
+  AppApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: AppApiProdStage
+    Properties:
+      Name: !Sub ${AWS::StackName}-api-key
+      Enabled: true
+      Value: !Ref ApiKeyValue
+      StageKeys:
+        - RestApiId: !Ref AppApi
+          StageName: prod
+
+  AppUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: AppApiProdStage
+    Properties:
+      UsagePlanName: !Sub ${AWS::StackName}-usage-plan
+      ApiStages:
+        - ApiId: !Ref AppApi
+          Stage: prod
+      Throttle:
+        RateLimit: 10
+        BurstLimit: 20
+
+  AppUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref AppApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref AppUsagePlan
+
+  # ── Lambda: Caption Generator ──
+  CaptionGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-caption-generator
+      CodeUri: ../backend/lambda/caption_generator/
+      Handler: app.handler
+      Role: !GetAtt LambdaBedrockRole.Arn
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /caption
+            Method: POST
+        ApiOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /caption
+            Method: OPTIONS
+            Auth:
+              ApiKeyRequired: false
+
+  # ── Lambda: Hashtag Generator ──
+  HashtagGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-hashtag-generator
+      CodeUri: ../backend/lambda/hashtag_generator/
+      Handler: app.handler
+      Role: !GetAtt LambdaBedrockRole.Arn
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /hashtags
+            Method: POST
+        ApiOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /hashtags
+            Method: OPTIONS
+            Auth:
+              ApiKeyRequired: false
+
+  # ── Lambda: Emoji Suggester ──
+  EmojiSuggesterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-emoji-suggester
+      CodeUri: ../backend/lambda/emoji_suggester/
+      Handler: app.handler
+      Role: !GetAtt LambdaBedrockRole.Arn
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /emojis
+            Method: POST
+        ApiOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /emojis
+            Method: OPTIONS
+            Auth:
+              ApiKeyRequired: false
+
+  # ── S3: Frontend static website ──
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-frontend-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${AppApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  FrontendBucketName:
+    Description: S3 bucket name for frontend
+    Value: !Ref FrontendBucket
+  FrontendUrl:
+    Description: Frontend website URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
