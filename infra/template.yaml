@@ -16,7 +16,7 @@ Parameters:
     Type: String
     Description: API key value for protecting the API
     NoEcho: true
-    Default: change-me-to-a-random-string
+    Default: "12345678901234567890"
 
 Resources:
 
@@ -63,18 +63,15 @@ Resources:
   # API Key + Usage Plan
   AppApiKey:
     Type: AWS::ApiGateway::ApiKey
-    DependsOn: AppApiProdStage
+    DependsOn: AppApi
     Properties:
       Name: !Sub ${AWS::StackName}-api-key
       Enabled: true
       Value: !Ref ApiKeyValue
-      StageKeys:
-        - RestApiId: !Ref AppApi
-          StageName: prod
 
   AppUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
-    DependsOn: AppApiProdStage
+    DependsOn: AppApi
     Properties:
       UsagePlanName: !Sub ${AWS::StackName}-usage-plan
       ApiStages:
